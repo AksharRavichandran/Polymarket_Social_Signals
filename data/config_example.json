@@ -1,0 +1,42 @@
+{
+  "polymarket": {
+    "api_base_url": "https://clob.polymarket.com",
+    "output_dir": "data/polymarket",
+    "max_markets": null,
+    "rate_limit_delay": 0.1
+  },
+  "reddit": {
+    "output_dir": "data/reddit",
+    "pushshift_dump_dir": null,
+    "preferred_subreddits": [
+      "wallstreetbets",
+      "cryptocurrency",
+      "politics",
+      "stocks",
+      "investing",
+      "economy",
+      "financialindependence"
+    ],
+    "praw": {
+      "client_id": null,
+      "client_secret": null,
+      "user_agent": "research_tool"
+    }
+  },
+  "twitter": {
+    "output_dir": "data/twitter",
+    "dataset_dir": null,
+    "api": {
+      "consumer_key": null,
+      "consumer_secret": null,
+      "access_token": null,
+      "access_token_secret": null,
+      "bearer_token": null
+    }
+  },
+  "collection": {
+    "time_window_days_before": 30,
+    "time_window_days_after": 7,
+    "shock_window_days": 3
+  }
+}

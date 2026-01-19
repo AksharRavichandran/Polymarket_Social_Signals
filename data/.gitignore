@@ -1,0 +1,17 @@
+# Data files (large, shouldn't be committed)
+*.csv
+*.json
+*.jsonl
+*.json.gz
+*.json.bz2
+
+# But keep config example
+!config_example.json
+
+# Raw data dumps
+raw_*
+
+# API keys and secrets
+config.json
+*.env
+.env
