@@ -88,7 +88,7 @@ python data/collect_polymarket.py
 ### 3. Data Sources
 
 - **Polymarket**: API at `https://clob.polymarket.com`
-- **Reddit**: Pushshift dumps (recommended) or PRAW API
+- **Reddit**: Pushshift dumps
 - **Twitter/X**: Public datasets or Twitter API
 
 ## Data Collection Strategy
@@ -122,4 +122,4 @@ Research project - see individual data source licenses for usage restrictions.
 
 ## Contributing
 
-This is a research project. For questions or collaborations, please contact the repository maintainer.
+This is a research project. For questions or collaborations, please contact akshar.ravichandran@gmail.com.
