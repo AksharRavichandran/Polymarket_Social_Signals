@@ -1,31 +1,44 @@
-# Polymarket Social Signals
+# Polymarket Momentum Analysis
 
-Research project investigating whether social media narratives (X, Reddit) contain predictive signal for prediction market dynamics (Polymarket), and whether that signal transfers to traditional financial markets.
+Research project analyzing belief momentum and price dynamics on Polymarket prediction markets. This project investigates how market beliefs evolve, which markets exhibit informational vs trivial dynamics, and how momentum patterns relate to market outcomes.
 
 ## Research Questions
 
-**Primary Question:**
-Do social media narratives (X, Reddit) contain predictive signal for prediction market dynamics (Polymarket), and does that signal transfer to traditional financial markets?
+**Primary Questions:**
+1. Which markets are informational vs trivial (one-sided)?
+2. Where does belief change precede resolution?
+3. Who moves prices first - informational traders or herd behavior?
+4. When does momentum become noise vs predictive signal?
 
-**Sub-questions:**
-1. Do changes in social media sentiment precede Polymarket price movements?
-2. Are topics/narratives more predictive than raw sentiment?
-3. Does Polymarket incorporate information faster than equity markets?
-4. Can Polymarket probabilities predict abnormal returns or volatility in related equities?
+**Key Analyses:**
+- Directional dominance (one-sided markets)
+- Outcome predictability vs market belief
+- Momentum persistence (price, volume, trader count)
+- Early vs late trader behavior
+- Correlated/chained bets across markets
+- YES/NO belief dynamics
 
-## Conceptual Framework
+## Analysis Framework
 
-Three-layer causal pipeline:
+The momentum analysis focuses on belief dynamics rather than simple price movements:
 
 ```
-Social Media Discourse (X, Reddit)
+Market Creation
   ↓
-LLM-based Signal Extraction (sentiment, stance, narratives, uncertainty)
+Price Evolution (entropy, momentum, flips)
   ↓
-Prediction Market Response (Polymarket prices, volume)
+Trader Behavior (early vs late, PnL analysis)
   ↓
-Traditional Market Reaction (stocks, options, volatility)
+Market Resolution
+  ↓
+Outcome Predictability (calibration, Brier scores)
 ```
+
+**Key Metrics:**
+- **Price Entropy**: Measures uncertainty in price path (low = one-sided, high = contested)
+- **Momentum**: Price/volume/trader count persistence over time
+- **Belief Velocity**: Rate of belief change before resolution
+- **Calibration**: How well market probabilities predict actual outcomes
 
 ## Repository Structure
 
@@ -33,26 +46,31 @@ Traditional Market Reaction (stocks, options, volatility)
 polymarket-social-signals/
 │
 ├── data/
-│   ├── polymarket/      # Polymarket market data
-│   ├── twitter/         # Twitter/X collected data
-│   ├── reddit/          # Reddit collected data
-│   └── collect_*.py     # Data collection scripts
+│   ├── polymarket/           # Polymarket market data
+│   │   ├── markets_processed.csv
+│   │   ├── query_sets.json
+│   │   ├── positions/        # User position data (optional)
+│   │   └── price_history/    # Historical price data
+│   ├── reddit/               # Reddit data (disabled)
+│   ├── twitter/              # Twitter data (disabled)
+│   └── collect_*.py          # Data collection scripts
 │
-├── labeling/
-│   └── prompts/         # LLM prompts for signal extraction
+├── notebooks/
+│   ├── momentum_analysis/    # Momentum analysis module
+│   │   ├── momentum_analysis.ipynb  # Main analysis notebook
+│   │   ├── momentum_analysis.py    # Analysis functions
+│   │   └── README.md               # Analysis documentation
+│   └── momentum_analysis.ipynb     # (legacy, use subdirectory)
 │
-├── features/
-│   ├── sentiment.py     # Sentiment extraction
-│   └── narratives.py    # Narrative clustering
-│
-├── models/
-│   ├── lead_lag.py      # Lead-lag analysis
-│   └── event_study.py   # Event study models
-│
-├── backtests/           # Trading strategy backtests
-├── notebooks/           # Analysis notebooks
-├── figures/             # Generated figures
-└── paper/               # Paper materials
+├── features/                 # Feature extraction (future)
+├── models/                   # Predictive models (future)
+├── backtests/                # Trading strategy backtests (future)
+├── figures/                  # Generated figures
+├── paper/                   # Paper materials
+├── sources/                  # Research papers and sources
+├── labeling/                 # Labeling tools and prompts
+├── requirements.txt          # Python dependencies
+└── README.md                 # This file
 ```
 
 ## Quick Start
@@ -70,50 +88,105 @@ cp data/config_example.json data/config.json
 
 ### 2. Data Collection
 
-Run the full data collection pipeline:
+Collect Polymarket market data:
 
 ```bash
-python data/orchestrate_collection.py
-```
-
-Or run individual collectors:
-
-```bash
-# Polymarket only
+# Collect market metadata
 python data/collect_polymarket.py
 
-# See data/README.md for more details
+# Collect user positions (optional, requires API key)
+python data/collect_polymarket.py positions <user_address>
 ```
 
-### 3. Data Sources
+**Data Requirements:**
+- **Required**: Market metadata (`markets_processed.csv`)
+- **Optional**: User positions (`positions/positions_processed.csv`)
+- **Required for full analysis**: Historical price data (to be collected from Polymarket API)
 
-- **Polymarket**: API at `https://clob.polymarket.com`
-- **Reddit**: Pushshift dumps
-- **Twitter/X**: Public datasets or Twitter API
+### 3. Run Momentum Analysis
 
-## Data Collection Strategy
+Open and run the Jupyter notebook:
 
-### Polymarket (Anchor Dataset)
+```bash
+jupyter notebook notebooks/momentum_analysis/momentum_analysis.ipynb
+```
 
-For each Polymarket market, we extract:
-- Market title, description, tags, end date, resolution criteria
-- Build query sets: entity names, hashtags, aliases, key phrases
+Or use the Python module directly:
 
-### Social Media Collection
+```python
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent))
 
-Posts are collected in time windows:
-- **Market window**: Market creation → resolution
-- **Shock window**: Around big probability moves
+from notebooks.momentum_analysis.momentum_analysis import (
+    analyze_directional_dominance,
+    analyze_momentum_persistence,
+    analyze_early_vs_late_traders,
+    # ... other functions
+)
+```
 
-This aligns social media data with Polymarket time series for causal/lead-lag analysis.
+See `notebooks/momentum_analysis/README.md` for detailed documentation.
+
+## Analysis Components
+
+### 1. Directional Dominance
+Identifies one-sided markets and calculates price entropy to distinguish trivial (near-certain) vs informational markets.
+
+### 2. Outcome Predictability
+- Calibration curves showing how well market probabilities predict outcomes
+- Brier scores for forecast accuracy
+- Identifies "obvious early" markets where outcome was clear from the start
+
+### 3. Momentum Persistence
+- Price momentum analysis (autocorrelation, mean reversion)
+- Volume momentum
+- Trader count momentum
+- Tests whether momentum continues or reverts
+
+### 4. Early vs Late Traders
+- Compares PnL across trading phases
+- Identifies informational traders (early, profitable) vs herd behavior (late, following)
+
+### 5. Correlated/Chained Bets
+- Finds semantically similar markets using text similarity
+- Tracks belief migration across related markets
+
+### 6. YES/NO Belief Dynamics
+- Analyzes which side (YES/NO) is favored over time
+- Measures belief strength and tracks belief flips
+- Calculates belief velocity (rate of change)
+
+## Key Insights
+
+The analysis answers:
+
+1. **Which markets are informational vs trivial?**
+   - Low entropy = trivial (near-certain outcomes from start)
+   - High entropy + high flip frequency = informational (contested, dynamic)
+
+2. **Where does belief change precede resolution?**
+   - Markets with high belief velocity before resolution
+   - Early price movements that predict outcomes
+
+3. **Who moves prices first?**
+   - Compare early vs late trader PnL
+   - Higher early trader PnL = informational traders leading
+   - Higher late trader PnL = herd behavior following
+
+4. **When does momentum become noise?**
+   - High autocorrelation + low predictive power = noise
+   - Mean-reverting markets = momentum is noise, not signal
 
 ## Status
 
-🚧 **In Development** - Data collection pipeline is set up. Next steps:
-- [x] Data collection infrastructure
-- [ ] LLM-based signal extraction
-- [ ] Lead-lag analysis
-- [ ] Cross-market spillover analysis
+🚧 **In Development** - Momentum analysis framework is set up. Current status:
+- [x] Market data collection infrastructure
+- [x] Momentum analysis functions
+- [x] Analysis notebook with sample data
+- [ ] Historical price data collection from API
+- [ ] Full analysis on real price history
+- [ ] Trading strategy backtests
 - [ ] Paper implementation
 
 ## License
