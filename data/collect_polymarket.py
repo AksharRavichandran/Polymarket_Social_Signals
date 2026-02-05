@@ -21,16 +21,16 @@ DEFAULT_BACKOFF_SEC = 1.5
 PARAMS = {
     "outdir": os.path.join("data", "polymarket"),
     "markets_csv": os.path.join("data", "polymarket_data", "markets.csv"),
-    "min_year": 2024,
+    "min_year": 2025,
     "fidelity_min": 60*12,
     "interval": "max",
     "yes_only": False,
-    "single_token": False,
     "prices": True,
     "format": "json",
     "max_markets": 500,
     "sample": False,
     "seed": 1337,
+    "append": True,
 }
 
 
@@ -55,28 +55,32 @@ def http_get(url: str, params: Optional[Dict[str, Any]] = None, timeout: int = D
     raise RuntimeError(f"GET failed after {DEFAULT_RETRIES} retries: {url} params={params} err={last_err}")
 
 
-def write_jsonl(path: str, rows: Iterable[Dict[str, Any]]) -> None:
+def write_jsonl(path: str, rows: Iterable[Dict[str, Any]], append: bool = False) -> None:
     outdir = os.path.dirname(path)
     if outdir:
         os.makedirs(outdir, exist_ok=True)
 
-    log(f"Writing JSONL -> {path}")
-    with open(path, "w", encoding="utf-8") as f:
+    mode = "a" if append else "w"
+    log(f"Writing JSONL -> {path} (append={append})")
+    with open(path, mode, encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
         f.flush()
         os.fsync(f.fileno())
 
 
-def write_csv(path: str, rows: Iterable[Dict[str, Any]], fieldnames: List[str]) -> None:
+def write_csv(path: str, rows: Iterable[Dict[str, Any]], fieldnames: List[str], append: bool = False) -> None:
     outdir = os.path.dirname(path)
     if outdir:
         os.makedirs(outdir, exist_ok=True)
 
-    log(f"Writing CSV -> {path}")
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    mode = "a" if append else "w"
+    write_header = not append or not os.path.exists(path)
+    log(f"Writing CSV -> {path} (append={append})")
+    with open(path, mode, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+        if write_header:
+            writer.writeheader()
         for row in rows:
             writer.writerow(row)
         f.flush()
@@ -198,9 +202,8 @@ def fetch_clob_token_ids_by_condition(condition_id: str, yes_only: bool) -> List
 
         if token_ids:
             unique = list(dict.fromkeys(token_ids))
-            limited = unique[:1]
-            log(f"Resolved {len(unique)} token ids from CLOB for conditionId={condition_id} (using {len(limited)})")
-            return limited
+            log(f"Resolved {len(unique)} token ids from CLOB for conditionId={condition_id}")
+            return unique
 
     return []
 
@@ -217,14 +220,6 @@ def fetch_prices_history(token_id: str, interval: str, fidelity_min: int) -> Dic
     if isinstance(data, list):
         return {"history": data}
     return {"history": []}
-
-
-def _select_single_token(token_ids: List[str], condition_id: str) -> List[str]:
-    if not token_ids:
-        return []
-    if len(token_ids) > 1:
-        log(f"Multiple YES tokens for conditionId={condition_id}; using first of {len(token_ids)}")
-    return [token_ids[0]]
 
 
 def read_markets_csv(path: str) -> List[Dict[str, Any]]:
@@ -253,6 +248,20 @@ def parse_market_row(row: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]
     if condition_id is not None:
         condition_id = str(condition_id)
     return market_id, condition_id
+
+
+def extract_market_id(market: Optional[Dict[str, Any]], fallback: Optional[str]) -> Optional[str]:
+    if market:
+        for key in ("id", "market_id", "marketId"):
+            if market.get(key) is not None:
+                return str(market.get(key))
+    return fallback
+
+
+def pick_start_end_dates(market: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    start = market.get("createdAt") or market.get("created_at")
+    end = market.get("closedTime") or market.get("endDate") or market.get("endDateIso")
+    return start, end
 
 
 def resolve_token_ids_from_csv_row(
@@ -334,7 +343,7 @@ def main() -> None:
 
     log(f"Final markets selected from CSV: {len(all_rows)}")
 
-    token_ids_by_cid: Dict[str, List[str]] = {}
+    token_ids_by_key: Dict[str, List[str]] = {}
     filtered_selected: Dict[str, Dict[str, Any]] = {}
     total = len(all_rows)
     for i, row in enumerate(all_rows, start=1):
@@ -343,10 +352,9 @@ def main() -> None:
         token_ids, detail = resolve_token_ids_from_csv_row(row, yes_only=params["yes_only"])
         if detail and condition_id is None:
             condition_id = extract_condition_id(detail)
-        if params["yes_only"] or params["single_token"]:
-            token_ids = _select_single_token(token_ids, condition_id or "unknown")
-        row_key = condition_id or f"row_{i}"
-        token_ids_by_cid[row_key] = token_ids
+        market_id = extract_market_id(detail, market_id)
+        row_key = market_id or condition_id or f"row_{i}"
+        token_ids_by_key[row_key] = token_ids
         if not token_ids and params["yes_only"]:
             log(f"Skipping conditionId={condition_id}; no YES token found")
             continue
@@ -355,50 +363,69 @@ def main() -> None:
             selected_market.update(detail)
         selected_market.update(row)
         filtered_selected[row_key] = selected_market
-        log(f"Resolved tokens {i}/{total} | conditionId={condition_id} | tokens={len(token_ids)}")
+        log(f"Resolved tokens {i}/{total} | market_id={market_id} | tokens={len(token_ids)}")
 
     # Write markets
-    market_rows = [
-        {
-            "conditionId": cid,
-            "question": m.get("question"),
-            "tags": m.get("tags"),
-            "clobTokenIds": token_ids_by_cid.get(cid, []),
-            "closed": m.get("closed"),
-            "market_id": m.get("id") or m.get("market_id") or m.get("marketId"),
-        }
-        for cid, m in filtered_selected.items()
-    ]
+    market_rows = []
+    for key, m in filtered_selected.items():
+        market_id = m.get("id") or m.get("market_id") or m.get("marketId")
+        start_date, end_date = pick_start_end_dates(m)
+        market_rows.append(
+            {
+                "market_id": market_id,
+                "conditionId": m.get("conditionId") or m.get("condition_id"),
+                "question": m.get("question"),
+                "tags": m.get("tags"),
+                "clobTokenIds": token_ids_by_key.get(key, []),
+                "closed": m.get("closed"),
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        )
 
     if fmt == "json":
-        write_jsonl(markets_path, market_rows)
+        write_jsonl(markets_path, market_rows, append=params["append"])
     else:
         rows = []
         for row in market_rows:
             rows.append(
                 {
+                    "market_id": row.get("market_id"),
                     "conditionId": row.get("conditionId"),
                     "question": row.get("question"),
                     "tags": json.dumps(row.get("tags"), ensure_ascii=False),
                     "clobTokenIds": ";".join(row.get("clobTokenIds") or []),
                     "closed": row.get("closed"),
+                    "start_date": row.get("start_date"),
+                    "end_date": row.get("end_date"),
                 }
             )
         write_csv(
             markets_path,
             rows,
-            ["conditionId", "question", "tags", "clobTokenIds", "closed"],
+            [
+                "market_id",
+                "conditionId",
+                "question",
+                "tags",
+                "clobTokenIds",
+                "closed",
+                "start_date",
+                "end_date",
+            ],
+            append=params["append"],
         )
 
     # Prices
     if params["prices"]:
         log("Fetching price history")
         price_rows: List[Dict[str, Any]] = []
-        total_tokens = sum(len(token_ids_by_cid.get(cid, [])) for cid in filtered_selected.keys())
+        total_tokens = sum(len(token_ids_by_key.get(key, [])) for key in filtered_selected.keys())
         token_counter = 0
         for i, (cid, m) in enumerate(filtered_selected.items(), start=1):
-            token_ids = token_ids_by_cid.get(cid, [])
-            log(f"Market {i}/{total} | conditionId={cid} | tokens={len(token_ids)}")
+            token_ids = token_ids_by_key.get(cid, [])
+            market_id = m.get("id") or m.get("market_id") or m.get("marketId")
+            log(f"Market {i}/{total} | market_id={market_id} | tokens={len(token_ids)}")
             for token_id in token_ids:
                 token_counter += 1
                 log(f"  Token {token_counter}/{total_tokens} | token_id={token_id}")
@@ -406,8 +433,8 @@ def main() -> None:
                 if fmt == "json":
                     price_rows.append(
                         {
-                            "conditionId": cid,
-                            "market_id": m.get("id") or m.get("market_id") or m.get("marketId"),
+                            "market_id": market_id,
+                            "conditionId": m.get("conditionId") or m.get("condition_id"),
                             "token_id": token_id,
                             "interval": params["interval"],
                             "fidelity_min": params["fidelity_min"],
@@ -418,7 +445,8 @@ def main() -> None:
                     for point in hist.get("history", []):
                         price_rows.append(
                             {
-                                "conditionId": cid,
+                                "market_id": market_id,
+                                "conditionId": m.get("conditionId") or m.get("condition_id"),
                                 "token_id": token_id,
                                 "interval": params["interval"],
                                 "fidelity_min": params["fidelity_min"],
@@ -429,12 +457,13 @@ def main() -> None:
                 time.sleep(0.03)
 
         if fmt == "json":
-            write_jsonl(prices_path, price_rows)
+            write_jsonl(prices_path, price_rows, append=params["append"])
         else:
             write_csv(
                 prices_path,
                 price_rows,
-                ["conditionId", "token_id", "interval", "fidelity_min", "timestamp", "price"],
+                ["market_id", "conditionId", "token_id", "interval", "fidelity_min", "timestamp", "price"],
+                append=params["append"],
             )
 
     log("Done.")
