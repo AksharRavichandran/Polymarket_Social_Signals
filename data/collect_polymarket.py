@@ -21,16 +21,16 @@ DEFAULT_BACKOFF_SEC = 1.5
 PARAMS = {
     "outdir": os.path.join("data", "polymarket"),
     "markets_csv": os.path.join("data", "polymarket_data", "markets.csv"),
-    "min_year": 2025,
+    "min_date": "2024-08-01", #YYYY-MM-DD (This date selected with the US election which expited growth to the platform)
     "fidelity_min": 60*12,
     "interval": "max",
     "yes_only": False,
     "prices": True,
     "format": "json",
-    "max_markets": 500,
-    "sample": False,
+    "max_markets": 1000,
     "seed": 1337,
-    "append": True,
+    "shuffle": True, #Shuffle markets before applying max_markets/sample
+    "append": False, #Append to existing ouptut files
 }
 
 
@@ -174,40 +174,6 @@ def extract_clob_token_ids(m: Dict[str, Any], yes_only: bool = False) -> List[st
     return []
 
 
-def fetch_clob_token_ids_by_condition(condition_id: str, yes_only: bool) -> List[str]:
-    params_list = [
-        {"condition_id": condition_id},
-        {"conditionId": condition_id},
-        {"market": condition_id},
-    ]
-    for params in params_list:
-        try:
-            data = http_get(f"{CLOB}/markets", params=params)
-        except Exception as e:
-            log(f"CLOB /markets lookup failed for {condition_id} params={params}: {e}")
-            continue
-
-        markets: List[Dict[str, Any]] = []
-        if isinstance(data, list):
-            markets = [m for m in data if isinstance(m, dict)]
-        elif isinstance(data, dict):
-            if isinstance(data.get("data"), list):
-                markets = [m for m in data["data"] if isinstance(m, dict)]
-            else:
-                markets = [data]
-
-        token_ids: List[str] = []
-        for m in markets:
-            token_ids.extend(extract_clob_token_ids(m, yes_only=yes_only))
-
-        if token_ids:
-            unique = list(dict.fromkeys(token_ids))
-            log(f"Resolved {len(unique)} token ids from CLOB for conditionId={condition_id}")
-            return unique
-
-    return []
-
-
 def fetch_prices_history(token_id: str, interval: str, fidelity_min: int) -> Dict[str, Any]:
     params = {"market": token_id, "interval": interval, "fidelity": int(fidelity_min)}
     req = requests.Request("GET", f"{CLOB}/prices-history", params=params).prepare()
@@ -285,16 +251,8 @@ def resolve_token_ids_from_csv_row(
         token_ids = extract_clob_token_ids(detail, yes_only=yes_only)
         if token_ids:
             return token_ids, detail
-
-    # Fall back to condition id lookup if we have it.
-    if condition_id:
-        token_ids = fetch_clob_token_ids_by_condition(condition_id, yes_only=yes_only)
-        if token_ids:
-            return token_ids, detail
-
-    # Final fallback: try resolving from the row itself (in case tokens exist).
-    token_ids = extract_clob_token_ids(row, yes_only=yes_only)
-    return token_ids, detail
+    log(f"No clobTokenIds found via Gamma for market_id={market_id} condition_id={condition_id}")
+    return [], detail
 
 
 def main() -> None:
@@ -317,8 +275,8 @@ def main() -> None:
     if total_rows == 0:
         raise RuntimeError(f"No rows in markets CSV: {params['markets_csv']}")
 
-    if params["min_year"] is not None:
-        min_dt = datetime(params["min_year"], 1, 1, tzinfo=timezone.utc)
+    if params["min_date"]:
+        min_dt = datetime.fromisoformat(params["min_date"].replace("Z", "+00:00")).astimezone(timezone.utc)
         filtered_rows = []
         skipped = 0
         for row in all_rows:
@@ -327,19 +285,19 @@ def main() -> None:
                 skipped += 1
                 continue
             filtered_rows.append(row)
-        log(f"Filtered by min-year={params['min_year']}: kept={len(filtered_rows)} skipped={skipped}")
+        log(f"Filtered by min_date={params['min_date']}: kept={len(filtered_rows)} skipped={skipped}")
         all_rows = filtered_rows
 
     total_rows = len(all_rows)
 
-    # Cap/sample
-    if params["max_markets"] is not None and total_rows > params["max_markets"]:
-        log(f"Applying market cap: {params['max_markets']} (sample={params['sample']})")
-        if params["sample"]:
-            rnd = random.Random(params["seed"])
-            all_rows = rnd.sample(all_rows, params["max_markets"])
-        else:
-            all_rows = all_rows[: params["max_markets"]]
+    if params["shuffle"]:
+        rnd = random.Random(params["seed"])
+        rnd.shuffle(all_rows)
+        log(f"Shuffled markets with seed={params['seed']}")
+
+    if params["max_markets"] is not None and len(all_rows) > params["max_markets"]:
+        all_rows = all_rows[: params["max_markets"]]
+        log(f"Applied max_markets={params['max_markets']}: remaining={len(all_rows)}")
 
     log(f"Final markets selected from CSV: {len(all_rows)}")
 

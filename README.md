@@ -85,6 +85,21 @@ python data/collect_polymarket.py
 # See data/README.md for more details
 ```
 
+Collector params are set at the top of `data/collect_polymarket.py` in `PARAMS`:
+- `min_date`: ISO date filter on `createdAt` (e.g., `2024-01-01`)
+- `max_markets`: cap the number of markets processed
+- `shuffle`: randomize markets before applying `max_markets`
+- `append`: append to existing outputs instead of overwriting
+
+### Momentum Analysis Notebook
+
+Run the momentum analysis notebook to explore momentum persistence, mean reversion, and informational vs trivial markets:
+- `notebooks/momentum_analysis/momentum_analysis.ipynb`
+
+Outputs are saved to:
+- `data/polymarket/analysis/momentum_metrics.csv`
+- `data/polymarket/analysis/momentum_persistence.csv`
+
 ### 3. Data Sources
 
 - **Polymarket**: API at `https://clob.polymarket.com`
