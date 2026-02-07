@@ -1,38 +1,22 @@
 # Momentum Analysis Notebook
 
-This notebook provides comprehensive momentum analysis for Polymarket markets, focusing on belief dynamics rather than simple price movements.
+This notebook provides momentum analysis for Polymarket markets, focusing on belief dynamics derived from price history.
 
 ## Features
 
-### 1. Directional Dominance
-- Identifies one-sided markets
-- Calculates price entropy (low entropy = near-certain outcomes)
-- Measures % time in high certainty ranges
+### 1. Informational vs Trivial Markets
+- Price entropy (low entropy = near-certain outcomes)
+- Flip frequency across 0.5
 
-### 2. Outcome Predictability
-- Calibration curves
-- Brier scores
-- Identifies "obvious early" markets
+### 2. Belief Change Before Resolution
+- Belief velocity in the final window
 
-### 3. Momentum Persistence
-- Price momentum analysis
-- Volume momentum
-- Trader count momentum
-- Tests for mean reversion vs momentum continuation
+### 3. Early vs Late Price Movers
+- PnL proxy from early vs late price change
 
-### 4. Early vs Late Traders
-- Compares PnL across trading phases
-- Identifies informational vs herd behavior
-
-### 5. Correlated/Chained Bets
-- Finds semantically similar markets
-- Tracks belief migration across related markets
-
-### 6. YES/NO Belief Dynamics
-- Analyzes which side is favored
-- Measures belief strength
-- Tracks belief flips
-- Calculates belief velocity
+### 4. Momentum vs Noise
+- Return autocorrelation and predictive power
+- Momentum persistence vs mean reversion
 
 ## Usage
 
@@ -44,30 +28,22 @@ pip install -r requirements.txt
 ```
 
 2. Collect data:
-   - Market metadata: `data/polymarket_data/markets.csv`
-   - Trades: `data/polymarket_data/processed/trades.csv`
-   - Raw fills: `data/polymarket_data/goldsky/orderFilled.csv`
+   - Run `python data/collect_polymarket.py`
+   - Outputs:
+     - `data/polymarket/markets.jsonl` (market metadata + `clobTokenIds`)
+     - `data/polymarket/prices_history.jsonl` (price history per token)
 
 ### Running the Notebook
 
 1. Open `notebooks/momentum_analysis/momentum_analysis.ipynb` in Jupyter
 2. Run cells sequentially
-3. The notebook includes sample data generation for demonstration
-4. Load the top markets and related data:
-```python
-from notebooks.momentum_analysis.momentum_analysis import load_top_market_bundle
-
-bundle = load_top_market_bundle(n=500, chunksize=500_000)
-bundle.markets.head()
-bundle.trades.head()
-bundle.order_filled.head()
-```
+3. Run cells sequentially; outputs are saved to `data/polymarket/analysis/`.
 
 ### Data Requirements
 
-- **Required**: `data/polymarket_data/markets.csv`
-- **Required**: `data/polymarket_data/processed/trades.csv`
-- **Required**: `data/polymarket_data/goldsky/orderFilled.csv`
+- **Required**: `data/polymarket/markets.jsonl`
+- **Required**: `data/polymarket/prices_history.jsonl`
+- **Optional fallback**: `data/polymarket_data/markets.csv` (metadata only)
 
 ## Key Insights
 
@@ -91,6 +67,7 @@ The notebook answers:
 
 ## Notes
 
-- The notebook expects the new CSV scheme described above
-- Some analyses still require price history or resolved outcomes (not yet wired to the new scheme)
-- All functions are available in `notebooks/momentum_analysis/momentum_analysis.py` for reuse
+- The notebook filters price history to the first `clobTokenIds` entry per market (assumed YES token).
+- Outputs are written to:
+  - `data/polymarket/analysis/momentum_metrics.csv`
+  - `data/polymarket/analysis/momentum_persistence.csv`
