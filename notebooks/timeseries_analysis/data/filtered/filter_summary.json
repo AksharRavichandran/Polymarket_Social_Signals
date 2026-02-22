@@ -1,0 +1,21 @@
+{
+  "filtered_at": "2026-02-22T00:44:37.884868+00:00",
+  "filter_params": {
+    "min_volume_usd": 10000,
+    "min_active_days": 7
+  },
+  "raw_count": 5000,
+  "filtered_count": 2051,
+  "resolved_count": 0,
+  "unresolved_count": 2051,
+  "volume_stats": {
+    "min": 10003.684879,
+    "max": 1531479284.504353,
+    "median": 63819.385908,
+    "total": 7404232387.36839
+  },
+  "rejection_reasons": {
+    "volume_too_low": 2708,
+    "too_new": 241
+  }
+}
